@@ -18,7 +18,7 @@ PyInstaller.__main__.run([
     '--onefile',
     '--windowed',
     '--clean',
-    '--name=Smart Event',
+    '--name=SmartEvent',
     '--icon=icon.ico',
     '--add-data=icon.ico;.',
     '--distpath=.',
@@ -27,4 +27,4 @@ PyInstaller.__main__.run([
 ])
 
 rmtree('build')
-os.remove('Smart Event.spec')
+os.remove('SmartEvent.spec')

@@ -38,7 +38,7 @@ class EventNode:
 class EventTreeApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Smart Event")
+        self.setWindowTitle("SmartEvent")
         self.setWindowIcon(icon())
         self.setMinimumSize(1500, 1500)
 
@@ -563,7 +563,7 @@ class EventTreeApp(QMainWindow):
         dialog = QDialog(self)
         dialog.rejected.connect(sys.exit)
         dialog.setMinimumSize(500,300)
-        dialog.setWindowTitle("Smart Event")
+        dialog.setWindowTitle("SmartEvent")
         layout = QVBoxLayout(dialog)
 
         button_new = QPushButton("Новый проект")
