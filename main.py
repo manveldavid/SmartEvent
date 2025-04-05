@@ -148,14 +148,15 @@ class EventTreeApp(QMainWindow):
         self.cursorpos_y = event.ydata
 
         if event.button == 1 and self.dragged_node and event.inaxes:
-            week = (self.dragged_node.date - self.project_start).days // 7
-            column_start = week * self.column_width * self.current_scale
-            column_end = (week + 1) * self.column_width * self.current_scale
+            # week = (self.dragged_node.date - self.project_start).days // 7
+            # x, y = self.node_positions[self.dragged_node]
+            # drag_min = x + self.column_width * self.current_scale # week * self.column_width * self.current_scale
+            # drag_max = x + self.column_width * self.current_scale # (week + 1) * self.column_width * self.current_scale
 
-            new_x = max(column_start, min(event.xdata, column_end))
+            # new_x = max(drag_min, min(event.xdata, drag_max))
             new_y = event.ydata
             
-            self.node_positions[self.dragged_node] = (new_x, new_y)
+            self.node_positions[self.dragged_node] = (self.node_positions[self.dragged_node][0], new_y)
             self.update_display()
 
         elif event.button == 2:
@@ -514,13 +515,12 @@ class EventTreeApp(QMainWindow):
             week = week - self.current_week_offset
 
             if week != -1:
-                column_start = week * self.column_width * self.current_scale
-                column_end = (week + 1) * self.column_width * self.current_scale
-
                 new_y = self.node_positions[node][1]
                 new_x = self.node_positions[node][0]
-                new_x = min(new_x, column_end)
-                new_x = max(column_start, new_x)
+                # column_start = week * self.column_width * self.current_scale
+                # column_end = (week + 1) * self.column_width * self.current_scale
+                # new_x = min(new_x, column_end)
+                # new_x = max(column_start, new_x)
                 
                 self.node_positions[node] = (new_x, new_y)
 
@@ -715,11 +715,11 @@ class EventTreeApp(QMainWindow):
         buttons = [
             ("Показать шкалу времени", self.toggle_timeline),
             ("Добавить событие", self.add_event),
-            ("Добавить предыдущее", lambda: self.add_related_event('previous')),
-            ("Добавить следующее", lambda: self.add_related_event('next')),
+            ("Добавить связанное событие", self.add_related_event),
             ("Редактировать событие", self.edit_event_properties),
             ("Удалить событие", self.delete_event),
             ("Связать события", self.link_events),
+            ("Разорвать все связи", self.remove_links),
             ("Фильтр по категориям", self.filter_by_category),
             ("Экспорт в Excel", self.export_to_excel),
             ("Экспорт в изображение", self.export_to_image),
@@ -750,7 +750,7 @@ class EventTreeApp(QMainWindow):
         self.show_timeline = not self.show_timeline
         self.update_display()
 
-    def add_event(self, parent=None):
+    def add_event(self):
         dialog = QDialog(self)
         dialog.setMinimumSize(500,300)
         dialog.setWindowTitle("Новое событие")
@@ -771,12 +771,12 @@ class EventTreeApp(QMainWindow):
         layout.addWidget(category_entry)
 
         button = QPushButton("Создать")
-        button.clicked.connect(lambda: self.add_event_click(name_entry, date_entry, category_entry, dialog, parent))
+        button.clicked.connect(lambda: self.add_event_click(name_entry, date_entry, category_entry, dialog))
         layout.addWidget(button)
 
         dialog.exec_()
 
-    def add_event_click(self, name_entry, date_entry, category_entry, dialog, parent):
+    def add_event_click(self, name_entry, date_entry, category_entry, dialog):
         try:
             name = name_entry.text()
             if not name:
@@ -793,24 +793,9 @@ class EventTreeApp(QMainWindow):
             self.graph.add_node(new_event)
 
             x = self.calculate_week_position(date)
-            y = 0.1 + 0.8 * len(self.graph.nodes) / (len(self.graph.nodes) + 1)
-            y = max(0.1, min(y, 0.9))
-            week_index = -1
-
-            for i, (start_of_week, end_of_week) in enumerate(self.week_columns):
-                if start_of_week <= date <= end_of_week:
-                    week_index = i
-                    break
-
-            if week_index != -1:
-                column_start = week_index * self.column_width
-                column_end = (week_index + 1) * self.column_width
-                x = max(column_start, min(x, column_end))
+            y = 0.5
 
             self.node_positions[new_event] = (x, y)
-
-            if parent:
-                self.graph.add_edge(parent, new_event)
 
             self.update_display()
             dialog.close()
@@ -818,7 +803,7 @@ class EventTreeApp(QMainWindow):
         except ValueError as e:
             QMessageBox.critical(self, "Ошибка", f"Некорректный ввод: {str(e)}")
 
-    def add_related_event(self, relation_type):
+    def add_related_event(self):
         selected = self.selected_node
         if not selected:
             QMessageBox.warning(self, "Внимание", "Сначала выберите событие!")
@@ -845,7 +830,7 @@ class EventTreeApp(QMainWindow):
         layout.addWidget(date_entry)
 
         duration_entry = QSpinBox()
-        duration_entry.setRange(1, 365)
+        duration_entry.setRange(-365, 365)
         duration_entry.setValue(1)
         duration_entry.setSuffix(" дней")
         duration_entry.hide()
@@ -866,12 +851,12 @@ class EventTreeApp(QMainWindow):
         layout.addWidget(category_entry)
 
         button = QPushButton("Создать")
-        button.clicked.connect(lambda: self.add_related_event_click(name_entry, date_entry, duration_entry, date_type, category_entry, dialog, selected, relation_type))
+        button.clicked.connect(lambda: self.add_related_event_click(name_entry, date_entry, duration_entry, date_type, category_entry, dialog, selected))
         layout.addWidget(button)
 
         dialog.exec_()
 
-    def add_related_event_click(self, name_entry, date_entry, duration_entry, date_type, category_entry, dialog, selected, relation_type):
+    def add_related_event_click(self, name_entry, date_entry, duration_entry, date_type, category_entry, dialog, selected):
         try:
             name = name_entry.text()
 
@@ -882,11 +867,7 @@ class EventTreeApp(QMainWindow):
                 date = date_entry.date().toPyDate()
             else:
                 duration = duration_entry.value()
-
-                if relation_type == 'previous':
-                    date = selected.date - datetime.timedelta(days=duration)
-                else:
-                    date = selected.date + datetime.timedelta(days=duration)
+                date = selected.date + datetime.timedelta(days=duration)
 
             if date < self.project_start or date > self.project_end:
                 raise ValueError("Дата должна быть в рамках проекта")
@@ -904,9 +885,9 @@ class EventTreeApp(QMainWindow):
             else:
                 self.node_positions[new_event] = (x, 0.5)
 
-            if relation_type == 'previous':
+            if new_event.date < selected.date:
                 self.graph.add_edge(new_event, selected)
-            elif relation_type == 'next':
+            else:
                 self.graph.add_edge(selected, new_event)
 
             self.update_display()
@@ -929,46 +910,83 @@ class EventTreeApp(QMainWindow):
         name_entry = QLineEdit(selected.name)
         layout.addWidget(name_entry)
 
-        layout.addWidget(QLabel("Дата (ДД.ММ.ГГГГ):"))
+        layout.addWidget(QLabel("Выберите способ задания даты:"))
+        date_type = QComboBox()
+        date_type.addItem("Календарь")
+        date_type.addItem("Длительность")
+        layout.addWidget(date_type)
+
         date_entry = QDateEdit(calendarPopup=True)
         date_entry.setDate(selected.date)
         date_entry.setDisplayFormat("dd.MM.yyyy")
         layout.addWidget(date_entry)
+
+        duration_entry = QSpinBox()
+        duration_entry.setRange(-365, 365)
+        duration_entry.setValue(1)
+        duration_entry.setSuffix(" дней")
+        duration_entry.hide()
+        layout.addWidget(duration_entry)
+
+        def toggle_date_widget(index):
+            if index == 0:
+                date_entry.show()
+                duration_entry.hide()
+            else:
+                date_entry.hide()
+                duration_entry.show()
+
+        date_type.currentIndexChanged.connect(toggle_date_widget)
 
         layout.addWidget(QLabel("Категория:"))
         category_entry = QLineEdit(selected.category)
         layout.addWidget(category_entry)
 
         button = QPushButton("Сохранить")
-        button.clicked.connect(lambda: self.edit_event_properties_click(name_entry, date_entry, category_entry, dialog, selected))
+        button.clicked.connect(lambda: self.edit_event_properties_click(name_entry, date_entry, duration_entry, date_type, category_entry, dialog, selected))
         layout.addWidget(button)
 
         dialog.exec_()
 
-    def edit_event_properties_click(self, name_entry, date_entry, category_entry, dialog, selected):
+    def edit_event_properties_click(self, name_entry, date_entry, duration_entry, date_type, category_entry, dialog, selected):
         try:
-            selected.name = name_entry.text()
-            selected.date = date_entry.date().toPyDate()
+            name = name_entry.text()
 
-            if selected.date < self.project_start or selected.date > self.project_end:
+            if not name:
+                raise ValueError("Название события не может быть пустым")
+            
+            selected.name = name
+            delta = datetime.timedelta.min
+            
+            if date_type.currentIndex() == 0:
+                date = date_entry.date().toPyDate()
+            else:
+                duration = duration_entry.value()
+                date = selected.date + datetime.timedelta(days=duration)
+
+            if date < self.project_start or date > self.project_end:
                 raise ValueError("Дата должна быть в рамках проекта")
+            
+            previous_max_date = datetime.date.min
+            for predecessor in self.graph.predecessors(selected):
+                if predecessor.date > previous_max_date:
+                    previous_max_date = predecessor.date
 
-            selected.category = category_entry.text()
-            x = self.calculate_week_position(selected.date)
-            current_y = self.node_positions[selected][1]
-            week_index = -1
+            if date < previous_max_date:
+                raise ValueError("Дата должна быть позже предыдущего события")
 
-            for i, (start_of_week, end_of_week) in enumerate(self.week_columns):
-                if start_of_week <= selected.date <= end_of_week:
-                    week_index = i
-                    break
+            delta = date - selected.date
+            selected.category = category_entry.text() or nocategory()
 
-            if week_index != -1:
-                column_start = week_index * self.column_width
-                column_end = (week_index + 1) * self.column_width
-                x = max(column_start, min(x, column_end))
+            next_nodes = set()
+            self.collect_next_nodes(selected, next_nodes)
+            next_nodes.add(selected)
 
-            self.node_positions[selected] = (x, current_y)
+            for node in next_nodes:
+                node.date = node.date + delta
+                x = self.calculate_week_position(node.date)
+                current_y = self.node_positions[node][1]
+                self.node_positions[node] = (x, current_y)
 
             self.update_display()
             dialog.close()
@@ -1014,15 +1032,40 @@ class EventTreeApp(QMainWindow):
             QMessageBox.warning(self, "Внимание", "Сначала выберите событие!")
             return
 
-        selected_event_name = selected_item.text().split(" (")[0]
-        selected_event = next((n for n in self.graph.nodes if n.name == selected_event_name), None)
+        selected_splited_text = selected_item.text().split(" (")
+        selected_event_name = selected_splited_text[0]
+        selected_event_date = (selected_splited_text[1].split(")")[0])
+        selected_event = next((n for n in self.graph.nodes if n.name == selected_event_name and n.date.strftime("%d.%m.%Y") == selected_event_date), None)
 
         if selected_event:
-            self.graph.add_edge(self.selected_node, selected_event)
+            if self.selected_node.date <= selected_event.date:
+                self.graph.add_edge(self.selected_node, selected_event)
+            else:
+                self.graph.add_edge(selected_event, self.selected_node)
+
             self.update_display()
             dialog.close()
         else:
             QMessageBox.warning(self, "Ошибка", "Событие не найдено!")
+
+    def remove_links(self):
+        if not self.selected_node:
+            QMessageBox.warning(self, "Внимание", "Сначала выберите событие!")
+            return
+
+        self.graph.remove_node(self.selected_node)
+        position = (0, 0)
+        
+        if self.selected_node in self.node_positions:
+            position = self.node_positions[self.selected_node]
+            del self.node_positions[self.selected_node]
+        
+        self.update_display()
+
+        self.graph.add_node(self.selected_node)
+        self.node_positions[self.selected_node] = position
+
+        self.update_display()
 
     def filter_by_category(self):
         categories = list(set(n.category for n in self.graph.nodes))
