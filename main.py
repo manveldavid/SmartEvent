@@ -131,8 +131,6 @@ class EventTreeApp(QMainWindow):
         self.toggle_timeline()
         self.toggle_timeline()
 
-        self.update_display()
-
         self.start_up()
 
 
@@ -1071,8 +1069,8 @@ class EventTreeApp(QMainWindow):
             return
 
         df = pandas.DataFrame([(n.name, n.date.strftime("%d.%m.%Y"), n.category) for n in self.get_filtered_nodes()], columns=["Событие", "Дата", "Категория"])
-
         filename, _ = QFileDialog.getSaveFileName(self, "Экспорт в Excel", "", "Excel файлы (*.xlsx)")
+
         if filename:
             df.to_excel(filename, index=False)
             QMessageBox.information(self, "Успех", f"Данные экспортированы в {filename}")
