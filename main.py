@@ -131,6 +131,8 @@ class EventTreeApp(QMainWindow):
         self.toggle_timeline()
         self.toggle_timeline()
 
+        self.update_display()
+
         self.start_up()
 
 
@@ -148,7 +150,7 @@ class EventTreeApp(QMainWindow):
         self.cursorpos_y = event.ydata
 
         if event.button == 1 and self.dragged_node and event.inaxes:
-            week = (self.dragged_node.date - self.project_start).days // 7
+            week = ((self.dragged_node.date - self.project_start_calculated).days) // 7
             left_border = week * self.column_width * self.current_scale
             right_border = (week + 1) * self.column_width * self.current_scale
             self.node_positions[self.dragged_node] = (max(left_border, min(event.xdata, right_border)), event.ydata)
@@ -344,24 +346,21 @@ class EventTreeApp(QMainWindow):
             else:
                 self.current_scale /= scale_factor
 
-            self.current_scale = max(0.1, min(self.current_scale, 10.0))
-
             for node in self.node_positions:
                 x, y = self.node_positions[node]
                 scaler = scale_factor if delta > 0 else 1 / scale_factor
                 new_x = x * scaler
-                new_y = y # * scaler
+                new_y = y * scaler
                 self.node_positions[node] = (new_x, new_y)
 
             if self.cursorpos_x and self.cursorpos_y:
                 self.initial_xlim = self.ax.get_xlim()  
                 self.initial_ylim = self.ax.get_ylim()
                 
-                dx = self.cursorpos_x - (self.cursorpos_x * (scale_factor if delta > 0 else 1 / scale_factor)) 
+                dx = self.cursorpos_x - (self.cursorpos_x * (scale_factor if delta > 0 else 1 / scale_factor))
                 dy = self.cursorpos_y - (self.cursorpos_y * (scale_factor if delta > 0 else 1 / scale_factor)) 
                 new_xlim = (self.initial_xlim[0] - dx, self.initial_xlim[1] - dx)
-                # new_ylim = (self.initial_ylim[0] - dy, self.initial_ylim[1] - dy)
-                new_ylim = (self.initial_ylim[0], self.initial_ylim[1])
+                new_ylim = (self.initial_ylim[0] - dy, self.initial_ylim[1] - dy)
 
                 self.current_xlim = new_xlim
                 self.current_ylim = new_ylim
@@ -420,7 +419,7 @@ class EventTreeApp(QMainWindow):
         self.ax.set_xlim(self.current_xlim)
         self.ax.set_ylim(self.current_ylim)
 
-        # self.update_event_positions()
+        fontsize = 8 * self.current_scale
 
         if self.week_columns and self.show_timeline:
             start_week = self.current_week_offset
@@ -434,7 +433,7 @@ class EventTreeApp(QMainWindow):
                 x = (i - start_week) * self.column_width * self.current_scale
 
                 if self.current_xlim[0] <= x <= self.current_xlim[1]:
-                    self.ax.text(x, self.current_ylim[1], f"{start_of_week.strftime('%d\n%m')}", ha='center', va='bottom', color='black')
+                    self.ax.text(x, self.current_ylim[1], f"{start_of_week.strftime('%d\n%m')}", ha='center', va='bottom', color='black', fontsize=fontsize)
                     self.ax.axvline(x,color='gray', linestyle='--', alpha=0.5, linewidth=0.3)
 
         filtered_nodes = self.get_filtered_nodes()
@@ -451,13 +450,13 @@ class EventTreeApp(QMainWindow):
 
                     if self.current_xlim[0] <= x <= self.current_xlim[1] and self.current_ylim[0] <= y <= self.current_ylim[1]:
                         text = f"{node.name}\n{node.date.strftime('%d.%m.%Y')}\n({node.category})"
-                        text_obj = self.ax.text(x, y, text, ha='center', va='center', color='black')
+                        text_obj = self.ax.text(x, y, text, ha='center', va='center', color='black', fontsize=fontsize)
 
                         bbox = text_obj.get_window_extent(renderer=self.figure.canvas.get_renderer())
                         bbox = bbox.transformed(self.ax.transData.inverted())
 
-                        boxwidth = bbox.width * 1
-                        boxheight = bbox.height * 1
+                        boxwidth = bbox.width
+                        boxheight = bbox.height
 
                         rect = FancyBboxPatch((x - boxwidth / 2, y - boxheight / 2), boxwidth, boxheight, boxstyle="round,pad=0.01", edgecolor='black', facecolor=color, alpha=0.8, lw=1)
                         self.ax.add_patch(rect)
@@ -472,21 +471,23 @@ class EventTreeApp(QMainWindow):
                 mid_y = ((y1 + y2) / 2)
 
                 if (self.current_xlim[0] <= x1 <= self.current_xlim[1] and self.current_ylim[0] <= y1 <= self.current_ylim[1]) or (self.current_xlim[0] <= x2 <= self.current_xlim[1] and self.current_ylim[0] <= y2 <= self.current_ylim[1]):
-                    x_offset = (boxwidth/2) + boxwidth*0.07
-                    x1 = x1 + x_offset
-                    x2 = x2 - x_offset
-                    x_offset = 0.02
-                    line_width = 0.002
+                    line_width = 0.001 * self.current_scale
+                    head_width = 0.01 * self.current_scale
+                    head_length = 0.01 * self.current_scale
+                    x_offset = head_length * 2
+                    
+                    x1 = x1 + (boxwidth + head_length) / 2
+                    x2 = x2 - (boxwidth + head_length) / 2
                     if x1+x_offset>=x2-x_offset:
                         self.ax.arrow(x1, y1, x_offset, 0, color='gray', linestyle='-', width=line_width, head_width=0, head_length=0)
                         self.ax.arrow(x1+x_offset, y1, 0, mid_y-y1, color='gray', linestyle='-', width=line_width, head_width=0, head_length=0)
                         self.ax.arrow(x1+x_offset, mid_y, x2-x1-2*x_offset, 0, color='gray', linestyle='-', width=line_width, head_width=0, head_length=0)
                         self.ax.arrow(x2-x_offset, mid_y, 0, y2-mid_y, color='gray', linestyle='-', width=line_width, head_width=0, head_length=0)
-                        self.ax.arrow(x2-x_offset, y2, x_offset, 0, color='gray', linestyle='-', width=line_width, head_width=0.01, head_length=0.01, length_includes_head = True)
+                        self.ax.arrow(x2-x_offset, y2, x_offset, 0, color='gray', linestyle='-', width=line_width, head_width=head_width, head_length=head_length, length_includes_head = True)
                     else:
                         self.ax.arrow(x1, y1, mid_x-x1, 0, color='gray', linestyle='-', width=line_width, head_width=0, head_length=0)
                         self.ax.arrow(mid_x, y1, 0, y2-y1, color='gray', linestyle='-', width=line_width, head_width=0, head_length=0)
-                        self.ax.arrow(mid_x, y2, x2-mid_x, 0, color='gray', linestyle='-', width=line_width, head_width=0.01, head_length=0.01, length_includes_head = True)
+                        self.ax.arrow(mid_x, y2, x2-mid_x, 0, color='gray', linestyle='-', width=line_width, head_width=head_width, head_length=head_length, length_includes_head = True)
 
         if self.week_columns and self.show_timeline and not subgraph.nodes:
             start_week = self.current_week_offset
@@ -505,13 +506,6 @@ class EventTreeApp(QMainWindow):
 
         self.canvas.draw()
         
-    def update_event_positions(self):
-        for node in self.graph.nodes:
-            week = (node.date - self.project_start).days // 7
-            left_border = week * self.column_width * self.current_scale
-            right_border = (week + 1) * self.column_width * self.current_scale
-            self.node_positions[node] = (max(left_border, min(self.node_positions[node][0], right_border)), self.node_positions[node][1])
-
     def set_dates(self):
             self.project_start = datetime.datetime.strptime(self.start_entry, "%d.%m.%Y").date()
             self.project_end = datetime.datetime.strptime(self.end_entry, "%d.%m.%Y").date()
@@ -525,6 +519,7 @@ class EventTreeApp(QMainWindow):
     def calculate_calendar_weeks(self):
         self.week_columns = []
         current_date = self.project_start
+        self.project_start_calculated = self.project_start - datetime.timedelta(days=current_date.weekday())
 
         while current_date <= self.project_end:
             start_of_week = current_date - datetime.timedelta(days=current_date.weekday())
@@ -537,10 +532,7 @@ class EventTreeApp(QMainWindow):
             current_date = end_of_week + datetime.timedelta(days=1)
 
     def calculate_date_x_position(self, date):
-        for i, (start_of_week, end_of_week) in enumerate(self.week_columns):
-            if start_of_week <= date <= end_of_week:
-                return (i + ((date - start_of_week).days / (end_of_week - start_of_week).days + 1)) * self.column_width
-        return 0.5
+        return ((date - self.project_start_calculated).days / 7) * self.column_width * self.current_scale
 
 
 # startup dialog
@@ -778,7 +770,7 @@ class EventTreeApp(QMainWindow):
             self.graph.add_node(new_event)
 
             x = self.calculate_date_x_position(date)
-            y = 0.5
+            y = (self.ax.get_ylim()[0] - self.ax.get_ylim()[1])/2
 
             self.node_positions[new_event] = (x, y)
 
@@ -867,8 +859,6 @@ class EventTreeApp(QMainWindow):
             if selected in self.node_positions:
                 parent_x, parent_y = self.node_positions[selected]
                 self.node_positions[new_event] = (x, parent_y)
-            else:
-                self.node_positions[new_event] = (x, 0.5)
 
             if new_event.date < selected.date:
                 self.graph.add_edge(new_event, selected)
